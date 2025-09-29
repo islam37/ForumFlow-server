@@ -73,6 +73,59 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+// GET /api/posts?page=1&limit=5&sort=recent/popularity
+app.get('/api/posts', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const sortBy = req.query.sort || 'recent'; // default sort by newest
+
+    const skip = (page - 1) * limit;
+    const db = client.db(DB_NAME);
+    const postsCollection = db.collection('posts');
+    
+    let pipeline = [];
+
+    // Add voteDifference for popularity sorting
+    if (sortBy === 'popularity') {
+      pipeline.push({
+        $addFields: {
+          voteDifference: { $subtract: ["$upVote", "$downVote"] },
+        },
+      });
+      pipeline.push({ $sort: { voteDifference: -1 } });
+    } else {
+      // Sort by newest
+      pipeline.push({ $sort: { createdAt: -1 } });
+    }
+
+    // Pagination
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limit });
+
+    const posts = await postsCollection.aggregate(pipeline).toArray();
+    const total = await postsCollection.countDocuments();
+
+    // Get comment counts
+    const commentsCollection = db.collection('comments');
+    const postsWithComments = await Promise.all(
+      posts.map(async (post) => {
+        const commentCount = await commentsCollection.countDocuments({ postId: post._id });
+        return { ...post, commentCount };
+      })
+    );
+
+    res.json({
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      posts: postsWithComments,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch posts", details: err.message });
+  }
+});
+
 // Start server after connecting to DB
 connectDB().then(() => {
   app.listen(PORT, () => {
