@@ -49,6 +49,30 @@ app.get('/api/test', async (req, res) => {
   }
 });
 
+
+/*  New Search API Route */
+
+app.get('/api/search', async (req, res) => {
+  try {
+    const { tag } = req.query;
+    if (!tag) {
+      return res.status(400).json({ error: "Tag is required" });
+    }
+
+    const db = client.db(DB_NAME);
+    const postsCollection = db.collection('posts'); 
+
+    // Search posts by tags (case-insensitive)
+    const results = await postsCollection
+      .find({ tags: { $regex: tag, $options: "i" } })
+      .toArray();
+
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: "Search failed", details: err.message });
+  }
+});
+
 // Start server after connecting to DB
 connectDB().then(() => {
   app.listen(PORT, () => {
