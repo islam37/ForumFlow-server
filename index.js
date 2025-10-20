@@ -430,6 +430,7 @@ app.get("/api/tags/:tag", async (req, res) => {
     res.status(500).json({ error: "Server error", details: err.message });
   }
 });
+
 // tags
 app.get("/api/tags", async (req, res) => {
   try {
@@ -443,6 +444,42 @@ app.get("/api/tags", async (req, res) => {
     res.status(500).json({ error: "Server error", details: err.message });
   }
 });
+
+
+// ------------------- SEARCH POSTS BY TAG OR TITLE -------------------
+app.get("/api/posts/search", async (req, res) => {
+  try {
+    const { query } = req.query; // search keyword from frontend
+
+    if (!query || query.trim() === "") {
+      return res.status(400).json({ error: "Search query required" });
+    }
+
+    const db = req.app.locals.dbClient.db(DB_NAME);
+    const postsCollection = db.collection("posts");
+
+    // Search by tag or title (case-insensitive)
+    const searchRegex = new RegExp(query, "i");
+
+    const posts = await postsCollection
+      .find({
+        $or: [
+          { tag: searchRegex },
+          { tags: searchRegex },
+          { postTitle: searchRegex },
+          { postDescription: searchRegex },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .toArray();
+
+    res.json({ posts });
+  } catch (err) {
+    res.status(500).json({ error: "Search failed", details: err.message });
+  }
+});
+
 
 
 
